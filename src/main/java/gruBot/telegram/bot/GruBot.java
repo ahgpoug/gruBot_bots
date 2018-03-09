@@ -1,6 +1,7 @@
 package gruBot.telegram.bot;
 
 import gruBot.telegram.firestore.Firestore;
+import gruBot.telegram.logger.Logger;
 import org.telegram.telegrambots.api.methods.GetFile;
 import org.telegram.telegrambots.api.methods.GetUserProfilePhotos;
 import org.telegram.telegrambots.api.methods.send.SendMessage;
@@ -10,8 +11,6 @@ import org.telegram.telegrambots.api.objects.Update;
 import org.telegram.telegrambots.api.objects.UserProfilePhotos;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.exceptions.TelegramApiException;
-
-import java.io.PrintStream;
 
 public class GruBot extends TelegramLongPollingBot {
     private Firestore firestore;
@@ -35,17 +34,13 @@ public class GruBot extends TelegramLongPollingBot {
         if (update.hasMessage()) {
             Message message = update.getMessage();
             try {
-                PrintStream consoleOut = new PrintStream(System.out, true, "UTF-8");
-
                 long chatId = message.getChatId();
                 String chatName = message.getChat().getTitle();
                 String messageText = message.getText();
                 String messageAuthor = message.getFrom().getUserName();
 
-                String result = String.format("Message from %s: \"%s\" at chat with name %s, id = %d", messageAuthor, messageText, chatName, chatId);
-                consoleOut.println(result);
-
-                consoleOut.println(String.format("Group exists: %b", firestore.checkGroupExists(chatId)));
+                String result = String.format("'%s' wrote to '%s': '%s'", messageAuthor, chatName, messageText);
+                Logger.log(result, Logger.INFO);
 
                 if (firestore.checkGroupExists(chatId)) {
 
@@ -56,14 +51,13 @@ public class GruBot extends TelegramLongPollingBot {
                 firestore.checkUserExistsInGroup(update, this);
 
                 if (message.hasText() && message.getText().matches(GruBotPatterns.announcement)) {
-                    consoleOut.println("This is a announcement");
                     SendMessage sendMessage = new SendMessage()
                             .setText("This is an announcement, dudeeeeeee!")
                             .setChatId(chatId);
                     execute(sendMessage);
                 }
             } catch (Exception e) {
-                e.printStackTrace();
+                Logger.log(e.getMessage(), Logger.ERROR);
             }
         }
     }

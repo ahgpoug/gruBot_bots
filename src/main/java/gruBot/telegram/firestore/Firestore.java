@@ -3,14 +3,13 @@ package gruBot.telegram.firestore;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.*;
 import gruBot.telegram.bot.GruBot;
+import gruBot.telegram.logger.Logger;
 import gruBot.telegram.objects.Group;
 import gruBot.telegram.objects.User;
 import gruBot.telegram.utils.Utils;
 import org.telegram.telegrambots.api.methods.GetFile;
 import org.telegram.telegrambots.api.methods.GetUserProfilePhotos;
-import org.telegram.telegrambots.api.methods.groupadministration.GetChat;
 import org.telegram.telegrambots.api.objects.*;
-import org.telegram.telegrambots.exceptions.TelegramApiException;
 
 import java.util.Comparator;
 import java.util.HashMap;
@@ -30,23 +29,45 @@ public class Firestore {
     }
 
     public boolean checkGroupExists(long chatId) throws ExecutionException, InterruptedException {
+        Logger.log("Checking group exists in database...", Logger.INFO);
         Query groupsQuery = db.collection("groups").whereEqualTo("chatId", chatId);
         ApiFuture<QuerySnapshot> snapshotApiFuture = groupsQuery.get();
 
         List<QueryDocumentSnapshot> documents = snapshotApiFuture.get().getDocuments();
 
+        Logger.log("Group exists - " + !documents.isEmpty(), Logger.INFO);
         return !documents.isEmpty();
     }
 
-    public void checkUserExistsInGroup(Update update, GruBot bot) throws ExecutionException, InterruptedException {
+    @SuppressWarnings("unchecked")
+    public void checkUserExistsInGroup(Update update, GruBot bot) throws ExecutionException, InterruptedException, NullPointerException {
         long chatId = update.getMessage().getChatId();
+        long userId = update.getMessage().getFrom().getId();
 
-        Query usersQuery = db.collection("users").whereEqualTo("groups." + chatId, true);
+        Query usersQuery = db.collection("users").whereEqualTo("userId", userId);
         ApiFuture<QuerySnapshot> snapshotApiFuture = usersQuery.get();
         List<QueryDocumentSnapshot> documents = snapshotApiFuture.get().getDocuments();
 
-        if (documents.isEmpty())
+        if (documents.isEmpty()) {
+            Logger.log("Creating new user...", Logger.INFO);
             createNewUser(update, bot);
+        } else {
+            Logger.log("Checking user group relations...", Logger.INFO);
+            Query groupsQuery = db.collection("groups").whereEqualTo("chatId", chatId);
+            snapshotApiFuture = groupsQuery.get();
+            documents = snapshotApiFuture.get().getDocuments();
+            for (DocumentSnapshot document : documents) {
+                Map<String, Boolean> users = (Map<String, Boolean>) document.get("users");
+                Boolean value = users.get(String.valueOf(userId));
+
+                if (value == null || (value != null && value == false)) {
+                    Logger.log("Adding user to the group", Logger.INFO);
+                    addUserToGroup(usersQuery, groupsQuery, chatId, userId);
+                } else {
+                    Logger.log("User is already in the group", Logger.INFO);
+                }
+            }
+        }
     }
 
     private void createNewUser(Update update, GruBot bot) {
@@ -70,6 +91,7 @@ public class Firestore {
         userMap.put("fullname", user.getFullname());
         userMap.put("phoneNumber", user.getPhoneNumber());
         userMap.put("imgUrl", user.getAvatar());
+        userMap.put("desc", user.getDesc());
 
         HashMap<String, Boolean> groups = new HashMap<>();
         groups.put(String.valueOf(message.getChatId()), true);
@@ -77,6 +99,31 @@ public class Firestore {
         userMap.put("groups", groups);
 
         db.collection("users").add(userMap);
+        Logger.log(String.format("User %s created", username), Logger.INFO);
+    }
+
+    private void addUserToGroup(Query usersQuery, Query groupsQuery, long chatId, long userId) throws ExecutionException, InterruptedException, NullPointerException {
+        ApiFuture<QuerySnapshot> snapshotApiFuture = usersQuery.get();
+        List<QueryDocumentSnapshot> documents = snapshotApiFuture.get().getDocuments();
+        System.out.println(documents.size());
+        for (DocumentSnapshot document : documents) {
+            Map<String, Object> updates = new HashMap<>();
+            updates.put("groups." + chatId, true);
+
+            ApiFuture<WriteResult> future = document.getReference().update(updates);
+            Logger.log("User groups updated", Logger.INFO);
+        }
+
+
+        snapshotApiFuture = groupsQuery.get();
+        documents = snapshotApiFuture.get().getDocuments();
+        for (DocumentSnapshot document : documents) {
+            Map<String, Object> updates = new HashMap<>();
+            updates.put("users." + userId, true);
+
+            document.getReference().update(updates);
+            Logger.log("Group users updated", Logger.INFO);
+        }
     }
 
     private String getUserProfilePhotoPath(GetUserProfilePhotos request, GruBot bot) {
@@ -101,12 +148,13 @@ public class Firestore {
                 }
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            Logger.log(e.getMessage(), Logger.ERROR);
         }
         return null;
     }
 
     public void createNewGroup(Update update) {
+        Logger.log("Creating new group...", Logger.INFO);
         Message message = update.getMessage();
         long chatId = message.getChatId();
         String chatName = message.getChat().getTitle();
@@ -123,6 +171,7 @@ public class Firestore {
         groupMap.put("users", group.getUsers());
 
         db.collection("groups").add(groupMap);
+        Logger.log("Group created...", Logger.INFO);
     }
 
     public void createNewAnnouncement(long groupId) {
