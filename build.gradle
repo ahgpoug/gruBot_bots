@@ -1,0 +1,35 @@
+group 'gruBot_telegram'
+version '1.0'
+
+apply plugin: 'java'
+
+sourceCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+}
+
+jar {
+    manifest {
+        attributes (
+            'Main-Class': 'gruBot.telegram.Main'
+        )
+    }
+}
+
+//create a single Jar with all dependencies
+task fatJar(type: Jar) {
+    manifest {
+        attributes 'Implementation-Title': 'Gradle Jar File',
+                'Implementation-Version': version,
+                'Main-Class': 'gruBot.telegram.Main'
+    }
+    baseName = project.name + '-all'
+    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    with jar
+}
+
+dependencies {
+    compile "org.telegram:telegrambots:3.6"
+    compile 'com.google.cloud:google-cloud-firestore:0.38.0-beta'
+}
