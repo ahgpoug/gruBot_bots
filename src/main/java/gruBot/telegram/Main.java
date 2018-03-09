@@ -1,7 +1,5 @@
 package gruBot.telegram;
 
-import com.google.cloud.firestore.Firestore;
-import com.google.cloud.firestore.FirestoreOptions;
 import gruBot.telegram.bot.GruBot;
 import org.telegram.telegrambots.ApiContextInitializer;
 import org.telegram.telegrambots.TelegramBotsApi;

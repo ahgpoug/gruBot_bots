@@ -4,19 +4,19 @@ import java.io.Serializable;
 import java.util.Map;
 
 public class Group implements Serializable {
-    private String id;
+    private long id;
     private String name;
     private Map<String, Boolean> users;
     private String imgURL;
 
-    public Group(String id, String name, Map<String, Boolean> users, String imgURL) {
+    public Group(long id, String name, Map<String, Boolean> users, String imgURL) {
         this.id = id;
         this.name = name;
         this.users = users;
         this.imgURL = imgURL;
     }
 
-    public String getId() {
+    public long getId() {
         return id;
     }
 
