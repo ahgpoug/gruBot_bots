@@ -3,6 +3,7 @@ package gruBot.telegram.firestore;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.*;
 import gruBot.telegram.bot.GruBot;
+import gruBot.telegram.bot.GruBotPatterns;
 import gruBot.telegram.logger.Logger;
 import gruBot.telegram.objects.Group;
 import gruBot.telegram.objects.User;
@@ -11,11 +12,10 @@ import org.telegram.telegrambots.api.methods.GetFile;
 import org.telegram.telegrambots.api.methods.GetUserProfilePhotos;
 import org.telegram.telegrambots.api.objects.*;
 
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class Firestore {
     private com.google.cloud.firestore.Firestore db;
@@ -174,7 +174,60 @@ public class Firestore {
         Logger.log("Group created...", Logger.INFO);
     }
 
-    public void createNewAnnouncement(long groupId) {
+    @SuppressWarnings("unchecked")
+    public void createNewAnnouncement(Update update) {
+        Logger.log("Creating new announcement...", Logger.INFO);
+        Message message = update.getMessage();
+        long chatId = message.getChatId();
 
+        Logger.log("Matching text to regexp...", Logger.INFO);
+
+        Matcher m = Pattern.compile(GruBotPatterns.announcementTitle, Pattern.DOTALL).matcher(message.getText());
+        String announcementTitle = "";
+        if(m.lookingAt()) {
+            announcementTitle = m.group(1);
+            Logger.log("Title match found", Logger.INFO);
+        }
+
+        m = Pattern.compile(GruBotPatterns.announcementText, Pattern.DOTALL).matcher(message.getText());
+        String announcementText = "";
+        if(m.lookingAt()) {
+            announcementText = m.group(1);
+            Logger.log("Text match found", Logger.INFO);
+        }
+
+        Logger.log("Matching finished", Logger.INFO);
+        Logger.log("Getting group users...", Logger.INFO);
+
+        Map<String, Boolean> groupUsers = new HashMap<>();
+        try {
+            Query groupsQuery = db.collection("groups").whereEqualTo("chatId", chatId);
+            ApiFuture<QuerySnapshot> snapshotApiFuture = groupsQuery.get();
+
+            List<QueryDocumentSnapshot> documents = snapshotApiFuture.get().getDocuments();
+            for (DocumentSnapshot document : documents) {
+                groupUsers = (Map<String, Boolean>) document.get("users");
+            }
+
+        } catch (Exception e) {
+            Logger.log(e.getMessage(), Logger.ERROR);
+        }
+
+        Logger.log("Creating announcement...", Logger.INFO);
+        HashMap<String, Object> announcement = new HashMap<>();
+        announcement.put("group", message.getChatId());
+        announcement.put("groupName", message.getChat().getTitle());
+        announcement.put("author", message.getFrom().getId());
+        announcement.put("authorName", message.getFrom().getFirstName() + " " + message.getFrom().getLastName());
+        announcement.put("desc", announcementTitle);
+        announcement.put("date", new Date());
+        announcement.put("text", announcementText);
+        HashMap<String, String> users = new HashMap<>();
+        for (Map.Entry<String, Boolean> user : groupUsers.entrySet())
+            users.put(user.getKey(), "new");
+        announcement.put("users", users);
+
+        db.collection("announcements").add(announcement);
+        Logger.log("Announcement created", Logger.INFO);
     }
 }

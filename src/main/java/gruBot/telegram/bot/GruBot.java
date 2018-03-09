@@ -12,6 +12,9 @@ import org.telegram.telegrambots.api.objects.UserProfilePhotos;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.exceptions.TelegramApiException;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 public class GruBot extends TelegramLongPollingBot {
     private Firestore firestore;
 
@@ -50,9 +53,15 @@ public class GruBot extends TelegramLongPollingBot {
 
                 firestore.checkUserExistsInGroup(update, this);
 
+                Matcher m = Pattern.compile(GruBotPatterns.announcement, Pattern.UNIX_LINES).matcher(message.getText());
+                if(m.matches()) {
+                    Logger.log("Found", Logger.INFO);
+                }
+
                 if (message.hasText() && message.getText().matches(GruBotPatterns.announcement)) {
+                    firestore.createNewAnnouncement(update);
                     SendMessage sendMessage = new SendMessage()
-                            .setText("This is an announcement, dudeeeeeee!")
+                            .setText("Announcement created")
                             .setChatId(chatId);
                     execute(sendMessage);
                 }
