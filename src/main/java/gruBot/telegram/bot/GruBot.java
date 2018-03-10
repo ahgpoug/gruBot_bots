@@ -29,7 +29,9 @@ public class GruBot extends TelegramLongPollingBot {
     }
 
     public GruBot() {
+        Logger.log("Initializing Firestore...", Logger.INFO);
         this.firestore = new Firestore();
+        Logger.log("Started", Logger.INFO);
     }
 
     @Override
@@ -53,12 +55,9 @@ public class GruBot extends TelegramLongPollingBot {
 
                 firestore.checkUserExistsInGroup(update, this);
 
-                Matcher m = Pattern.compile(GruBotPatterns.announcement, Pattern.UNIX_LINES).matcher(message.getText());
+                Matcher m = Pattern.compile(GruBotPatterns.announcement, Pattern.MULTILINE).matcher(message.getText());
                 if(m.matches()) {
-                    Logger.log("Found", Logger.INFO);
-                }
-
-                if (message.hasText() && message.getText().matches(GruBotPatterns.announcement)) {
+                    Logger.log("Announcement is found", Logger.INFO);
                     firestore.createNewAnnouncement(update);
                     SendMessage sendMessage = new SendMessage()
                             .setText("Announcement created")

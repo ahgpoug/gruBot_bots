@@ -38,7 +38,7 @@ public class Logger {
                     break;
             }
 
-            String line = String.format("%s[%s] [%s] %s", color, type, date, message);
+            String line = String.format("%s[%s] [%s] %s%s", color, date, type, message, ANSI_WHITE);
             consoleOut.println(line);
         } catch (Exception e) {
             e.printStackTrace();

@@ -3,6 +3,7 @@ package gruBot.telegram.firestore;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.*;
 import gruBot.telegram.bot.GruBot;
+import gruBot.telegram.bot.GruBotConfig;
 import gruBot.telegram.bot.GruBotPatterns;
 import gruBot.telegram.logger.Logger;
 import gruBot.telegram.objects.Group;
@@ -23,7 +24,7 @@ public class Firestore {
     public Firestore() {
         FirestoreOptions firestoreOptions =
                 FirestoreOptions.getDefaultInstance().toBuilder()
-                        .setProjectId("grubot-7d217")
+                        .setProjectId(GruBotConfig.PROJECT_ID)
                         .build();
         this.db = firestoreOptions.getService();
     }
@@ -180,20 +181,24 @@ public class Firestore {
         Message message = update.getMessage();
         long chatId = message.getChatId();
 
-        Logger.log("Matching text to regexp...", Logger.INFO);
-
-        Matcher m = Pattern.compile(GruBotPatterns.announcementTitle, Pattern.DOTALL).matcher(message.getText());
+        Logger.log("Matching title to regexp...", Logger.INFO);
+        Matcher m = Pattern.compile(GruBotPatterns.announcementTitle, Pattern.MULTILINE).matcher(message.getText());
         String announcementTitle = "";
-        if(m.lookingAt()) {
-            announcementTitle = m.group(1);
+        if(m.find()) {
+            announcementTitle = m.group(0);
             Logger.log("Title match found", Logger.INFO);
+        } else {
+            Logger.log("Title match not found", Logger.WARNING);
         }
 
-        m = Pattern.compile(GruBotPatterns.announcementText, Pattern.DOTALL).matcher(message.getText());
+        Logger.log("Matching text to regexp...", Logger.INFO);
+        m = Pattern.compile(GruBotPatterns.announcementText, Pattern.MULTILINE).matcher(message.getText());
         String announcementText = "";
-        if(m.lookingAt()) {
-            announcementText = m.group(1);
+        if(m.find()) {
+            announcementText = m.group(0);
             Logger.log("Text match found", Logger.INFO);
+        } else {
+            Logger.log("Text match not found", Logger.WARNING);
         }
 
         Logger.log("Matching finished", Logger.INFO);
