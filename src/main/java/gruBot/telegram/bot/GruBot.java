@@ -13,7 +13,6 @@ import org.telegram.telegrambots.api.objects.UserProfilePhotos;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.exceptions.TelegramApiException;
 
-import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -44,13 +43,12 @@ public class GruBot extends TelegramLongPollingBot {
             try {
                 processCommonMessage(message);
 
-                if (firestore.checkGroupExists(message.getChatId())) {
-
-                } else {
+                if (!firestore.checkGroupExists(message.getChatId()))
                     firestore.createNewGroup(update);
-                }
 
                 firestore.checkUserExistsInGroup(update, this);
+
+                firestore.saveMessage(message);
 
                 Matcher m = Pattern.compile(GruBotPatterns.announcement, Pattern.MULTILINE).matcher(message.getText());
                 if(m.matches()) {

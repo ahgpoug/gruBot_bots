@@ -6,6 +6,7 @@ import gruBot.telegram.bot.GruBot;
 import gruBot.telegram.bot.GruBotConfig;
 import gruBot.telegram.bot.GruBotPatterns;
 import gruBot.telegram.logger.Logger;
+import gruBot.telegram.objects.ChatMessage;
 import gruBot.telegram.objects.Group;
 import gruBot.telegram.objects.User;
 import gruBot.telegram.utils.Utils;
@@ -13,6 +14,8 @@ import org.telegram.telegrambots.api.methods.GetFile;
 import org.telegram.telegrambots.api.methods.GetUserProfilePhotos;
 import org.telegram.telegrambots.api.objects.*;
 
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.regex.Matcher;
@@ -175,8 +178,23 @@ public class Firestore {
         Logger.log("Group created...", Logger.INFO);
     }
 
+    public void saveMessage(Message message) {
+        Logger.log("Saving message...", Logger.INFO);
+
+        ChatMessage chatMessage = new ChatMessage(message.getText(), message.getChatId(), message.getFrom().getId(), Timestamp.from(Instant.ofEpochSecond(message.getDate())));
+
+        HashMap<String, Object> messageMap = new HashMap<>();
+        messageMap.put("messageText", chatMessage.getMessageText());
+        messageMap.put("chatId", chatMessage.getChatId());
+        messageMap.put("userId", chatMessage.getUserId());
+        messageMap.put("dateCreated", chatMessage.getDateCreated());
+
+        db.collection("messages").add(messageMap);
+        Logger.log("Message saved", Logger.INFO);
+    }
+
     @SuppressWarnings("unchecked")
-    public HashMap<String, Object>  createNewAnnouncement(Update update) {
+    public HashMap<String, Object> createNewAnnouncement(Update update) {
         Logger.log("Creating new announcement...", Logger.INFO);
         Message message = update.getMessage();
         long chatId = message.getChatId();
