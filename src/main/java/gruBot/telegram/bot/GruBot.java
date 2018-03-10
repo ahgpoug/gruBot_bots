@@ -14,6 +14,7 @@ import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.exceptions.TelegramApiException;
 
 import java.util.HashMap;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -54,6 +55,11 @@ public class GruBot extends TelegramLongPollingBot {
                 if(m.matches()) {
                     processAnnouncement(update);
                 }
+
+                m = Pattern.compile(GruBotPatterns.vote, Pattern.DOTALL).matcher(message.getText());
+                if(m.matches()) {
+                    processVote(update);
+                }
             } catch (Exception e) {
                 Logger.log(e.getMessage(), Logger.ERROR);
             }
@@ -87,7 +93,30 @@ public class GruBot extends TelegramLongPollingBot {
         }
     }
 
-    private Message sendTextMessage(Update update, String text) throws TelegramApiException {
+    @SuppressWarnings("unchecked")
+    private void processVote(Update update) throws TelegramApiException {
+        Message message = update.getMessage();
+        Logger.log("Vote is detected", Logger.INFO);
+        HashMap<String, Object> vote = firestore.createNewVote(update);
+        StringBuilder options = new StringBuilder();
+        for (Map.Entry<String, String> option : ((Map<String, String>) vote.get("voteOptions")).entrySet())
+            options.append(option.getKey()).append(". ").append(option.getValue()).append("\r\n");
+
+        String announcementText = String.format("Голосование:\r\n%s\r%s", vote.get("desc").toString(), options);
+
+        Message voteMessage = sendTextMessage(update, announcementText);
+
+        if (message.getChat().isGroupChat())
+            sendTextMessage(update, "Закреплять сообщения можно только в супер-чатах.\nИзмените группу для активации данного функционала");
+        else {
+            PinChatMessage pinChatMessage = new PinChatMessage()
+                    .setChatId(message.getChatId())
+                    .setMessageId(voteMessage.getMessageId());
+            execute(pinChatMessage);
+        }
+    }
+
+    public Message sendTextMessage(Update update, String text) throws TelegramApiException {
         SendMessage sendMessage = new SendMessage()
                 .setText(text)
                 .setChatId(update.getMessage().getChatId());

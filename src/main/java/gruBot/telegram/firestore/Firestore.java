@@ -118,7 +118,6 @@ public class Firestore {
             Logger.log("User groups updated", Logger.INFO);
         }
 
-
         snapshotApiFuture = groupsQuery.get();
         documents = snapshotApiFuture.get().getDocuments();
         for (DocumentSnapshot document : documents) {
@@ -181,13 +180,14 @@ public class Firestore {
     public void saveMessage(Message message) {
         Logger.log("Saving message...", Logger.INFO);
 
-        ChatMessage chatMessage = new ChatMessage(message.getText(), message.getChatId(), message.getFrom().getId(), Timestamp.from(Instant.ofEpochSecond(message.getDate())));
+        ChatMessage chatMessage = new ChatMessage(message.getText(), message.getChatId(), message.getFrom().getId(), Timestamp.from(Instant.ofEpochSecond(message.getDate())), "telegram");
 
         HashMap<String, Object> messageMap = new HashMap<>();
         messageMap.put("messageText", chatMessage.getMessageText());
         messageMap.put("chatId", chatMessage.getChatId());
         messageMap.put("userId", chatMessage.getUserId());
         messageMap.put("dateCreated", chatMessage.getDateCreated());
+        messageMap.put("messageFrom", chatMessage.getMessageFrom());
 
         db.collection("messages").add(messageMap);
         Logger.log("Message saved", Logger.INFO);
@@ -202,7 +202,7 @@ public class Firestore {
         Logger.log("Matching title to regexp...", Logger.INFO);
         Matcher m = Pattern.compile(GruBotPatterns.announcementTitle, Pattern.MULTILINE).matcher(message.getText());
         String announcementTitle = "";
-        if(m.find()) {
+        if (m.find()) {
             announcementTitle = m.group(0).replace("!", "");
             Logger.log("Title match found", Logger.INFO);
         } else {
@@ -212,7 +212,7 @@ public class Firestore {
         Logger.log("Matching text to regexp...", Logger.INFO);
         m = Pattern.compile(GruBotPatterns.announcementText, Pattern.MULTILINE).matcher(message.getText());
         String announcementText = "";
-        if(m.find()) {
+        if (m.find()) {
             announcementText = m.group(0);
             Logger.log("Text match found", Logger.INFO);
         } else {
@@ -253,5 +253,70 @@ public class Firestore {
         db.collection("announcements").add(announcement);
         Logger.log("Announcement created", Logger.INFO);
         return announcement;
+    }
+
+    @SuppressWarnings("unchecked")
+    public HashMap<String, Object> createNewVote(Update update) {
+        Logger.log("Creating new poll...", Logger.INFO);
+        Message message = update.getMessage();
+        long chatId = message.getChatId();
+
+        Logger.log("Matching title to regexp...", Logger.INFO);
+        Matcher m = Pattern.compile(GruBotPatterns.voteTitle, Pattern.MULTILINE).matcher(message.getText());
+        String voteTitle = "";
+        if(m.find()) {
+            voteTitle = m.group(0).replace("!", "");
+            Logger.log("Title match found", Logger.INFO);
+        } else {
+            Logger.log("Title match not found", Logger.WARNING);
+        }
+
+        Logger.log("Matching text to regexp...", Logger.INFO);
+        m = Pattern.compile(GruBotPatterns.voteText, Pattern.MULTILINE).matcher(message.getText());
+
+        HashMap<String, String> voteOptions = new HashMap<>();
+        int i = 0;
+        while (m.find()) {
+            voteOptions.put(String.valueOf(i), m.group().replaceFirst(GruBotPatterns.voteOptionTextOnly, ""));
+            i++;
+            Logger.log("Text match found", Logger.INFO);
+        }
+        if (i == 0)
+            Logger.log("Text match not found", Logger.WARNING);
+
+        Logger.log("Matching finished", Logger.INFO);
+        Logger.log("Getting group users...", Logger.INFO);
+
+        Map<String, Boolean> groupUsers = new HashMap<>();
+        try {
+            Query groupsQuery = db.collection("groups").whereEqualTo("chatId", chatId);
+            ApiFuture<QuerySnapshot> snapshotApiFuture = groupsQuery.get();
+
+            List<QueryDocumentSnapshot> documents = snapshotApiFuture.get().getDocuments();
+            for (DocumentSnapshot document : documents) {
+                groupUsers = (Map<String, Boolean>) document.get("users");
+            }
+
+        } catch (Exception e) {
+            Logger.log(e.getMessage(), Logger.ERROR);
+        }
+
+        Logger.log("Creating poll...", Logger.INFO);
+        HashMap<String, Object> vote = new HashMap<>();
+        vote.put("group", message.getChatId());
+        vote.put("groupName", message.getChat().getTitle());
+        vote.put("author", message.getFrom().getId());
+        vote.put("authorName", message.getFrom().getFirstName() + " " + message.getFrom().getLastName());
+        vote.put("desc", voteTitle);
+        vote.put("date", new Date());
+        vote.put("voteOptions", voteOptions);
+        HashMap<String, String> users = new HashMap<>();
+        for (Map.Entry<String, Boolean> user : groupUsers.entrySet())
+            users.put(user.getKey(), "new");
+        vote.put("users", users);
+
+        db.collection("votes").add(vote);
+        Logger.log("Poll created", Logger.INFO);
+        return vote;
     }
 }
