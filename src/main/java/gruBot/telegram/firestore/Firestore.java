@@ -176,7 +176,7 @@ public class Firestore {
     }
 
     @SuppressWarnings("unchecked")
-    public void createNewAnnouncement(Update update) {
+    public HashMap<String, Object>  createNewAnnouncement(Update update) {
         Logger.log("Creating new announcement...", Logger.INFO);
         Message message = update.getMessage();
         long chatId = message.getChatId();
@@ -185,7 +185,7 @@ public class Firestore {
         Matcher m = Pattern.compile(GruBotPatterns.announcementTitle, Pattern.MULTILINE).matcher(message.getText());
         String announcementTitle = "";
         if(m.find()) {
-            announcementTitle = m.group(0);
+            announcementTitle = m.group(0).replace("!", "");
             Logger.log("Title match found", Logger.INFO);
         } else {
             Logger.log("Title match not found", Logger.WARNING);
@@ -234,5 +234,6 @@ public class Firestore {
 
         db.collection("announcements").add(announcement);
         Logger.log("Announcement created", Logger.INFO);
+        return announcement;
     }
 }
