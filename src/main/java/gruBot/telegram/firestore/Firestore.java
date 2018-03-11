@@ -265,7 +265,7 @@ public class Firestore {
         Matcher m = Pattern.compile(GruBotPatterns.voteTitle, Pattern.MULTILINE).matcher(message.getText());
         String voteTitle = "";
         if(m.find()) {
-            voteTitle = m.group(0).replace("!", "");
+            voteTitle = m.group(0).replace("!", "").replaceAll("\r", "");
             Logger.log("Title match found", Logger.INFO);
         } else {
             Logger.log("Title match not found", Logger.WARNING);
@@ -277,7 +277,7 @@ public class Firestore {
         HashMap<String, String> voteOptions = new HashMap<>();
         int i = 0;
         while (m.find()) {
-            voteOptions.put(String.valueOf(i), m.group().replaceFirst(GruBotPatterns.voteOptionTextOnly, ""));
+            voteOptions.put(String.valueOf(i), m.group().replaceFirst(GruBotPatterns.voteOptionTextOnly, "").replaceAll("\r", ""));
             i++;
             Logger.log("Text match found", Logger.INFO);
         }
