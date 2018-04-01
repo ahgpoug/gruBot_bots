@@ -262,10 +262,10 @@ public class Firestore {
             HashMap<String, Integer> voteCounts = new HashMap<>();
 
             for (Map.Entry<String, String> entry : users.entrySet()) {
-                Integer currentValue = voteCounts.get(entry.getValue());
+                Integer currentValue = voteCounts.get(String.valueOf(entry.getValue()));
                 if (currentValue == null)
                     currentValue = 0;
-
+                
                 voteCounts.put(String.valueOf(entry.getValue()), currentValue + 1);
             }
 

@@ -84,7 +84,6 @@ public class GruBot extends TelegramLongPollingBot {
             if (callbackData.contains("update_poll_")) {
                 int checkedIndex = Integer.valueOf(callbackData.substring(callbackData.lastIndexOf("_") + 1));
 
-                Logger.log("Message id is: " +  String.valueOf(message.getMessageId()), Logger.WARNING);
                 try {
                     EditMessageText editMessageText = firestore.updatePollAnswer(this, update.getCallbackQuery().getFrom().getId(), checkedIndex, message.getMessageId());
                     editMessageText.setChatId(message.getChatId())
