@@ -7,7 +7,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.util.Properties;
 
-public class XMLreader {
+public class XMLReader {
     public static void readBotConfig() {
         try {
             Logger.log("Reading config...", Logger.INFO);

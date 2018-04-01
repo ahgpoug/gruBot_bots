@@ -1,14 +1,16 @@
 package gruBot.telegram.bot;
 
+import com.google.api.core.ApiFuture;
+import com.google.cloud.firestore.DocumentReference;
 import gruBot.telegram.firestore.Firestore;
 import gruBot.telegram.logger.Logger;
-import org.telegram.telegrambots.api.methods.GetFile;
-import org.telegram.telegrambots.api.methods.GetUserProfilePhotos;
-import org.telegram.telegrambots.api.methods.groupadministration.GetChatAdministrators;
 import org.telegram.telegrambots.api.methods.groupadministration.GetChatMember;
 import org.telegram.telegrambots.api.methods.pinnedmessages.PinChatMessage;
 import org.telegram.telegrambots.api.methods.send.SendMessage;
-import org.telegram.telegrambots.api.objects.*;
+import org.telegram.telegrambots.api.methods.updatingmessages.EditMessageText;
+import org.telegram.telegrambots.api.objects.ChatMember;
+import org.telegram.telegrambots.api.objects.Message;
+import org.telegram.telegrambots.api.objects.Update;
 import org.telegram.telegrambots.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
@@ -50,31 +52,50 @@ public class GruBot extends TelegramLongPollingBot {
                 if (!firestore.checkGroupExists(message.getChatId()))
                     firestore.createNewGroup(update);
 
-                firestore.checkUserExistsInGroup(update, this);
+                firestore.checkUserExistsInGroup(update);
 
-                firestore.saveMessage(message);
+                if (message.hasText()) {
+                    Matcher m = Pattern.compile(GruBotPatterns.announcement, Pattern.DOTALL).matcher(message.getText());
+                    if (m.matches()) {
+                        if (canUserPinMessages(message))
+                            processAnnouncement(update);
+                        else
+                            sendTextMessage(update, "У пользователя недостаточно прав для создания объявлений");
+                    }
 
-                Matcher m = Pattern.compile(GruBotPatterns.announcement, Pattern.DOTALL).matcher(message.getText());
-                if (m.matches()) {
-                    if (true) //canUserPinMessages(message))
-                        processAnnouncement(update);
-                    else
-                        sendTextMessage(update, "У пользователя недостаточно прав для создания объявлений");
-                }
+                    canUserPinMessages(message);
 
-                m = Pattern.compile(GruBotPatterns.vote, Pattern.DOTALL).matcher(message.getText());
-                if (m.matches()) {
-                    if (true)//canUserPinMessages(message))
-                        processVote(update);
-                    else
-                        sendTextMessage(update, "У пользователя недостаточно прав для создания голосований");
+                    m = Pattern.compile(GruBotPatterns.vote, Pattern.DOTALL).matcher(message.getText());
+                    if (m.matches()) {
+                        if (canUserPinMessages(message))
+                            processVote(update);
+                        else
+                            sendTextMessage(update, "У пользователя недостаточно прав для создания голосований");
+                    }
                 }
             } catch (Exception e) {
                 Logger.log(e.getMessage(), Logger.ERROR);
                 e.printStackTrace();
             }
         } else if (update.hasCallbackQuery()) {
+            String callbackData = update.getCallbackQuery().getData();
+            Message message = update.getCallbackQuery().getMessage();
 
+            if (callbackData.contains("update_poll_")) {
+                int checkedIndex = Integer.valueOf(callbackData.substring(callbackData.lastIndexOf("_") + 1));
+
+                Logger.log("Message id is: " +  String.valueOf(message.getMessageId()), Logger.WARNING);
+                try {
+                    EditMessageText editMessageText = firestore.updatePollAnswer(this, update.getCallbackQuery().getFrom().getId(), checkedIndex, message.getMessageId());
+                    editMessageText.setChatId(message.getChatId())
+                            .setMessageId(message.getMessageId());
+
+                    if (!editMessageText.getText().equals(message.getText()))
+                        execute(editMessageText);
+                } catch (Exception e) {
+                    Logger.log(e.getMessage(), Logger.ERROR);
+                }
+            }
         }
     }
 
@@ -109,13 +130,15 @@ public class GruBot extends TelegramLongPollingBot {
     private void processVote(Update update) throws TelegramApiException {
         Message message = update.getMessage();
         Logger.log("Vote is detected", Logger.INFO);
-        HashMap<String, Object> vote = firestore.createNewVote(update);
+
+        HashMap<String, Object> vote = firestore.createNewPoll(update);
+
         StringBuilder options = new StringBuilder();
         for (Map.Entry<String, String> option : ((HashMap<String, String>) vote.get("voteOptions")).entrySet())
-            options.append(option.getKey()).append(". ").append(option.getValue()).append("\r\n");
+            options.append(option.getKey()).append(". ").append(option.getValue()).append(" [0]").append("\r\n");
+        options.append("\r\n").append("Не проголосовало [").append(((HashMap<String, String>) vote.get("users")).size()).append("]");
 
-        String announcementText = String.format("Голосование:\r\n%s\r%s", vote.get("desc").toString(), options);
-
+        String announcementText = String.format("Голосование:\r\n%s\r\n%s", vote.get("desc").toString(), options);
 
         SendMessage sendVoteMessage = new SendMessage()
                 .setChatId(message.getChatId())
@@ -131,9 +154,15 @@ public class GruBot extends TelegramLongPollingBot {
                     .setMessageId(voteMessage.getMessageId());
             execute(pinChatMessage);
         }
+
+        try {
+            firestore.setMessageIdToPoll(voteMessage.getMessageId(), (ApiFuture<DocumentReference>) vote.get("reference"));
+        } catch (Exception e) {
+            Logger.log(e.getMessage(), Logger.ERROR);
+        }
     }
 
-    public Message sendTextMessage(Update update, String text) throws TelegramApiException {
+    private Message sendTextMessage(Update update, String text) throws TelegramApiException {
         SendMessage sendMessage = new SendMessage()
                 .setText(text)
                 .setChatId(update.getMessage().getChatId());
@@ -141,30 +170,32 @@ public class GruBot extends TelegramLongPollingBot {
         return execute(sendMessage);
     }
 
-    private InlineKeyboardMarkup getVoteKeyboard(HashMap<String, String> options) throws TelegramApiException {
+    public InlineKeyboardMarkup getVoteKeyboard(HashMap<String, String> options) {
         InlineKeyboardMarkup markupInline = new InlineKeyboardMarkup();
         List<List<InlineKeyboardButton>> rowsInline = new ArrayList<>();
-        List<InlineKeyboardButton> rowInline = new ArrayList<>();
-        for (Map.Entry<String, String> option : options.entrySet())
-            rowInline.add(new InlineKeyboardButton().setText(option.getValue()).setCallbackData("update_poll"));
-        rowsInline.add(rowInline);
+        for (Map.Entry<String , String> option : options.entrySet()) {
+            ArrayList<InlineKeyboardButton> buttons = new ArrayList<>();
+            InlineKeyboardButton inlineKeyboardButton = new InlineKeyboardButton();
+            String itemNumber = option.getKey();
+            inlineKeyboardButton.setText(itemNumber).setCallbackData("update_poll_" + itemNumber);
+            buttons.add(inlineKeyboardButton);
+            rowsInline.add(buttons);
+        }
         markupInline.setKeyboard(rowsInline);
         return markupInline;
     }
 
     private boolean canUserPinMessages(Message message) {
         try {
-            GetChatAdministrators getChatAdministrators = new GetChatAdministrators()
+            GetChatMember getChatMember = new GetChatMember()
+                    .setUserId(message.getFrom().getId())
                     .setChatId(message.getChatId());
 
-            ArrayList<ChatMember> administrators = execute(getChatAdministrators);
-
-
-            execute(getChatAdministrators).forEach(chatMember -> {
-                if (chatMember.getUser().getId().equals(message.getFrom().getId()) && chatMember.getCanPinMessages())
-                    Logger.log(chatMember.getCanPinMessages().toString(), Logger.WARNING);
-            });
-
+            ChatMember chatMember = execute(getChatMember);
+            if (chatMember != null) {
+                String memberStatus = chatMember.getStatus();
+                return memberStatus.equals("creator") || memberStatus.equals("administrator");
+            }
 
             return false;
         } catch (Exception e) {
@@ -172,13 +203,5 @@ public class GruBot extends TelegramLongPollingBot {
             e.printStackTrace();
             return false;
         }
-    }
-
-    public UserProfilePhotos getUserPhotos(GetUserProfilePhotos request) throws TelegramApiException {
-        return execute(request);
-    }
-
-    public File getFileByRequest(GetFile request) throws TelegramApiException {
-        return execute(request);
     }
 }

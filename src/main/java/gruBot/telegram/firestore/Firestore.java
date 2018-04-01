@@ -6,17 +6,15 @@ import gruBot.telegram.bot.GruBot;
 import gruBot.telegram.bot.GruBotConfig;
 import gruBot.telegram.bot.GruBotPatterns;
 import gruBot.telegram.logger.Logger;
-import gruBot.telegram.objects.ChatMessage;
 import gruBot.telegram.objects.Group;
-import gruBot.telegram.objects.User;
-import gruBot.telegram.utils.Utils;
-import org.telegram.telegrambots.api.methods.GetFile;
-import org.telegram.telegrambots.api.methods.GetUserProfilePhotos;
-import org.telegram.telegrambots.api.objects.*;
+import org.telegram.telegrambots.api.methods.updatingmessages.EditMessageText;
+import org.telegram.telegrambots.api.objects.Message;
+import org.telegram.telegrambots.api.objects.Update;
 
-import java.sql.Timestamp;
-import java.time.Instant;
-import java.util.*;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -44,82 +42,30 @@ public class Firestore {
     }
 
     @SuppressWarnings("unchecked")
-    public void checkUserExistsInGroup(Update update, GruBot bot) throws ExecutionException, InterruptedException, NullPointerException {
+    public void checkUserExistsInGroup(Update update) throws ExecutionException, InterruptedException, NullPointerException {
         long chatId = update.getMessage().getChatId();
         long userId = update.getMessage().getFrom().getId();
 
-        Query usersQuery = db.collection("users").whereEqualTo("userId", userId);
-        ApiFuture<QuerySnapshot> snapshotApiFuture = usersQuery.get();
+        Logger.log("Checking user group relations...", Logger.INFO);
+        Query groupsQuery = db.collection("groups").whereEqualTo("chatId", chatId);
+        ApiFuture<QuerySnapshot> snapshotApiFuture = groupsQuery.get();
         List<QueryDocumentSnapshot> documents = snapshotApiFuture.get().getDocuments();
+        for (DocumentSnapshot document : documents) {
+            Map<String, Boolean> users = (Map<String, Boolean>) document.get("users");
+            Boolean value = users.get(String.valueOf(userId));
 
-        if (documents.isEmpty()) {
-            Logger.log("Creating new user...", Logger.INFO);
-            createNewUser(update, bot);
-        } else {
-            Logger.log("Checking user group relations...", Logger.INFO);
-            Query groupsQuery = db.collection("groups").whereEqualTo("chatId", chatId);
-            snapshotApiFuture = groupsQuery.get();
-            documents = snapshotApiFuture.get().getDocuments();
-            for (DocumentSnapshot document : documents) {
-                Map<String, Boolean> users = (Map<String, Boolean>) document.get("users");
-                Boolean value = users.get(String.valueOf(userId));
-
-                if (value == null || (value != null && value == false)) {
-                    Logger.log("Adding user to the group", Logger.INFO);
-                    addUserToGroup(usersQuery, groupsQuery, chatId, userId);
-                } else {
-                    Logger.log("User is already in the group", Logger.INFO);
-                }
+            if (value == null || (value != null && value == false)) {
+                Logger.log("Adding user to the group", Logger.INFO);
+                addUserToGroup(groupsQuery, userId);
+            } else {
+                Logger.log("User is already in the group", Logger.INFO);
             }
         }
     }
 
-    private void createNewUser(Update update, GruBot bot) {
-        Message message = update.getMessage();
-
-        long userId = message.getFrom().getId();
-        String username = message.getFrom().getUserName();
-        String fullname = message.getFrom().getFirstName() + " " + message.getFrom().getLastName();
-        String phoneNumber = "Unknown";
-
-        GetUserProfilePhotos getUserProfilePhotosRequest = new GetUserProfilePhotos()
-                .setUserId((int) userId)
-                .setOffset(0);
-        String imgUrl = Utils.createUrlForTelegramFile(getUserProfilePhotoPath(getUserProfilePhotosRequest, bot));
-
-        User user = new User(userId, username, fullname, phoneNumber, "", imgUrl);
-
-        HashMap<String, Object> userMap = new HashMap<>();
-        userMap.put("userId", user.getId());
-        userMap.put("username", user.getUsername());
-        userMap.put("fullname", user.getFullname());
-        userMap.put("phoneNumber", user.getPhoneNumber());
-        userMap.put("imgUrl", user.getAvatar());
-        userMap.put("desc", user.getDesc());
-
-        HashMap<String, Boolean> groups = new HashMap<>();
-        groups.put(String.valueOf(message.getChatId()), true);
-
-        userMap.put("groups", groups);
-
-        db.collection("users").add(userMap);
-        Logger.log(String.format("User %s created", username), Logger.INFO);
-    }
-
-    private void addUserToGroup(Query usersQuery, Query groupsQuery, long chatId, long userId) throws ExecutionException, InterruptedException, NullPointerException {
-        ApiFuture<QuerySnapshot> snapshotApiFuture = usersQuery.get();
+    private void addUserToGroup(Query groupsQuery, long userId) throws ExecutionException, InterruptedException, NullPointerException {
+        ApiFuture<QuerySnapshot> snapshotApiFuture = groupsQuery.get();
         List<QueryDocumentSnapshot> documents = snapshotApiFuture.get().getDocuments();
-        System.out.println(documents.size());
-        for (DocumentSnapshot document : documents) {
-            Map<String, Object> updates = new HashMap<>();
-            updates.put("groups." + chatId, true);
-
-            ApiFuture<WriteResult> future = document.getReference().update(updates);
-            Logger.log("User groups updated", Logger.INFO);
-        }
-
-        snapshotApiFuture = groupsQuery.get();
-        documents = snapshotApiFuture.get().getDocuments();
         for (DocumentSnapshot document : documents) {
             Map<String, Object> updates = new HashMap<>();
             updates.put("users." + userId, true);
@@ -129,68 +75,21 @@ public class Firestore {
         }
     }
 
-    private String getUserProfilePhotoPath(GetUserProfilePhotos request, GruBot bot) {
-        UserProfilePhotos photos;
-
-        try {
-            photos = bot.getUserPhotos(request);
-            PhotoSize photo = photos.getPhotos().get(0)
-                    .stream()
-                    .sorted(Comparator.comparing(PhotoSize::getFileSize).reversed())
-                    .findFirst()
-                    .orElse(null);
-
-            if (photo != null) {
-                if (photo.hasFilePath()) {
-                    return photo.getFilePath();
-                } else {
-                    GetFile getFileMethod = new GetFile();
-                    getFileMethod.setFileId(photo.getFileId());
-                    File file = bot.getFileByRequest(getFileMethod);
-                    return file.getFilePath();
-                }
-            }
-        } catch (Exception e) {
-            Logger.log(e.getMessage(), Logger.ERROR);
-        }
-        return null;
-    }
-
     public void createNewGroup(Update update) {
         Logger.log("Creating new group...", Logger.INFO);
         Message message = update.getMessage();
         long chatId = message.getChatId();
         String chatName = message.getChat().getTitle();
 
-        String imgFileId = "";//message.getChat().getPhoto().getBigFileId();
-        String imgUrl = "";//Utils.createUrlForTelegramFile(imgFileId);
-
-        Group group = new Group(chatId, chatName, (new HashMap<>()), imgUrl);
+        Group group = new Group(chatId, chatName, (new HashMap<>()));
 
         HashMap<String, Object> groupMap = new HashMap<>();
         groupMap.put("chatId", group.getId());
-        groupMap.put("imgUrl", group.getImgURL());
         groupMap.put("name", group.getName());
         groupMap.put("users", group.getUsers());
 
         db.collection("groups").add(groupMap);
         Logger.log("Group created...", Logger.INFO);
-    }
-
-    public void saveMessage(Message message) {
-        Logger.log("Saving message...", Logger.INFO);
-
-        ChatMessage chatMessage = new ChatMessage(message.getText(), message.getChatId(), message.getFrom().getId(), Timestamp.from(Instant.ofEpochSecond(message.getDate())), "telegram");
-
-        HashMap<String, Object> messageMap = new HashMap<>();
-        messageMap.put("messageText", chatMessage.getMessageText());
-        messageMap.put("chatId", chatMessage.getChatId());
-        messageMap.put("userId", chatMessage.getUserId());
-        messageMap.put("dateCreated", chatMessage.getDateCreated());
-        messageMap.put("messageFrom", chatMessage.getMessageFrom());
-
-        db.collection("messages").add(messageMap);
-        Logger.log("Message saved", Logger.INFO);
     }
 
     @SuppressWarnings("unchecked")
@@ -204,9 +103,9 @@ public class Firestore {
         String announcementTitle = "";
         if (m.find()) {
             announcementTitle = m.group(0).replace("!", "");
-            Logger.log("Title match found", Logger.INFO);
+            Logger.log("Title match is found", Logger.INFO);
         } else {
-            Logger.log("Title match not found", Logger.WARNING);
+            Logger.log("Title match is not found", Logger.WARNING);
         }
 
         Logger.log("Matching text to regexp...", Logger.INFO);
@@ -214,9 +113,9 @@ public class Firestore {
         String announcementText = "";
         if (m.find()) {
             announcementText = m.group(0);
-            Logger.log("Text match found", Logger.INFO);
+            Logger.log("Text match is found", Logger.INFO);
         } else {
-            Logger.log("Text match not found", Logger.WARNING);
+            Logger.log("Text match is not found", Logger.WARNING);
         }
 
         Logger.log("Matching finished", Logger.INFO);
@@ -256,7 +155,7 @@ public class Firestore {
     }
 
     @SuppressWarnings("unchecked")
-    public HashMap<String, Object> createNewVote(Update update) {
+    public HashMap<String, Object> createNewPoll(Update update) {
         Logger.log("Creating new poll...", Logger.INFO);
         Message message = update.getMessage();
         long chatId = message.getChatId();
@@ -265,10 +164,10 @@ public class Firestore {
         Matcher m = Pattern.compile(GruBotPatterns.voteTitle, Pattern.MULTILINE).matcher(message.getText());
         String voteTitle = "";
         if(m.find()) {
-            voteTitle = m.group(0).replace("!", "").replaceAll("\r", "");
-            Logger.log("Title match found", Logger.INFO);
+            voteTitle = m.group(0).replace("?", "").replaceAll("\r", "");
+            Logger.log("Title match is found", Logger.INFO);
         } else {
-            Logger.log("Title match not found", Logger.WARNING);
+            Logger.log("Title match is not found", Logger.WARNING);
         }
 
         Logger.log("Matching text to regexp...", Logger.INFO);
@@ -277,12 +176,12 @@ public class Firestore {
         HashMap<String, String> voteOptions = new HashMap<>();
         int i = 0;
         while (m.find()) {
-            voteOptions.put(String.valueOf(i), m.group().replaceFirst(GruBotPatterns.voteOptionTextOnly, "").replaceAll("\r", ""));
+            voteOptions.put(String.valueOf(i + 1), m.group().replaceFirst(GruBotPatterns.voteOptionTextOnly, "").replaceAll("\r", "").replaceAll("\n", ""));
             i++;
-            Logger.log("Text match found", Logger.INFO);
+            Logger.log("Text match is found", Logger.INFO);
         }
         if (i == 0)
-            Logger.log("Text match not found", Logger.WARNING);
+            Logger.log("Text match is not found", Logger.WARNING);
 
         Logger.log("Matching finished", Logger.INFO);
         Logger.log("Getting group users...", Logger.INFO);
@@ -304,6 +203,7 @@ public class Firestore {
         Logger.log("Creating poll...", Logger.INFO);
         HashMap<String, Object> vote = new HashMap<>();
         vote.put("group", message.getChatId());
+        vote.put("pollMessageId", -1);
         vote.put("groupName", message.getChat().getTitle());
         vote.put("author", message.getFrom().getId());
         vote.put("authorName", message.getFrom().getFirstName() + " " + message.getFrom().getLastName());
@@ -315,8 +215,90 @@ public class Firestore {
             users.put(user.getKey(), "new");
         vote.put("users", users);
 
-        db.collection("votes").add(vote);
+        ApiFuture<DocumentReference> reference = db.collection("votes").add(vote);
+        vote.put("reference", reference);
         Logger.log("Poll created", Logger.INFO);
         return vote;
+    }
+
+    public void setMessageIdToPoll(int messageId, ApiFuture<DocumentReference> referenceApiFuture) throws ExecutionException, InterruptedException, NullPointerException {
+        DocumentReference document = referenceApiFuture.get();
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("pollMessageId", messageId);
+
+        document.update(updates);
+    }
+
+    @SuppressWarnings("unchecked")
+    public EditMessageText updatePollAnswer(GruBot bot, int userId, int pollOptionNumber, int pollMessageId) throws ExecutionException, InterruptedException, NullPointerException {
+        EditMessageText editMessageText = null;
+
+        Query pollQuery = db.collection("votes").whereEqualTo("pollMessageId", pollMessageId);
+        ApiFuture<QuerySnapshot> snapshotApiFuture = pollQuery.get();
+        List<QueryDocumentSnapshot> documents = snapshotApiFuture.get().getDocuments();
+        for (DocumentSnapshot document : documents) {
+            Map<String, Object> updates = new HashMap<>();
+            updates.put("users." + userId, pollOptionNumber);
+
+            document.getReference().update(updates);
+        }
+
+        pollQuery = db.collection("votes").whereEqualTo("pollMessageId", pollMessageId);
+        snapshotApiFuture = pollQuery.get();
+        documents = snapshotApiFuture.get().getDocuments();
+        for (DocumentSnapshot document : documents) {
+            String newMessageText = "";
+            Map<String, Object> updates = new HashMap<>();
+            updates.put("users." + userId, pollOptionNumber);
+
+            document.getReference().update(updates);
+
+            String title = (String) document.get("desc");
+            HashMap<String, String> voteOptions = (HashMap<String, String>) document.get("voteOptions");
+            HashMap<String, String> users = (HashMap<String, String>) document.get("users");
+
+            newMessageText = title;
+
+            HashMap<String, Integer> voteCounts = new HashMap<>();
+
+            for (Map.Entry<String, String> entry : users.entrySet()) {
+                Integer currentValue = voteCounts.get(entry.getValue());
+                if (currentValue == null)
+                    currentValue = 0;
+
+                voteCounts.put(String.valueOf(entry.getValue()), currentValue + 1);
+            }
+
+            StringBuilder builder = new StringBuilder(newMessageText);
+            for (Map.Entry<String, String> entry : voteOptions.entrySet()) {
+                Integer value = voteCounts.get(entry.getKey().trim());
+                if (value == null)
+                    value = 0;
+
+                builder.append("\r\n")
+                        .append(entry.getKey())
+                        .append(". ")
+                        .append(entry.getValue())
+                        .append(" [")
+                        .append(value)
+                        .append("]");
+            }
+            Integer value = voteCounts.get("new");
+            if (value == null)
+                value = 0;
+            builder.append("\r\n\r\n")
+                    .append("Не проголосовало [")
+                    .append(value)
+                    .append("]");
+
+            newMessageText = builder.toString();
+
+            editMessageText = new EditMessageText()
+                    .setText(newMessageText)
+                    .setReplyMarkup(bot.getVoteKeyboard(voteOptions));
+        }
+
+
+        return editMessageText;
     }
 }

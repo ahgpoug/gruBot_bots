@@ -7,13 +7,11 @@ public class Group implements Serializable {
     private long id;
     private String name;
     private Map<String, Boolean> users;
-    private String imgURL;
 
-    public Group(long id, String name, Map<String, Boolean> users, String imgURL) {
+    public Group(long id, String name, Map<String, Boolean> users) {
         this.id = id;
         this.name = name;
         this.users = users;
-        this.imgURL = imgURL;
     }
 
     public long getId() {
@@ -22,10 +20,6 @@ public class Group implements Serializable {
 
     public String getName() {
         return name;
-    }
-
-    public String getImgURL() {
-        return imgURL;
     }
 
     public Map<String, Boolean> getUsers() {

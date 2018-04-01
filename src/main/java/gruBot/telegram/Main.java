@@ -2,7 +2,7 @@ package gruBot.telegram;
 
 import gruBot.telegram.bot.GruBot;
 import gruBot.telegram.logger.Logger;
-import gruBot.telegram.utils.XMLreader;
+import gruBot.telegram.utils.XMLReader;
 import org.telegram.telegrambots.ApiContextInitializer;
 import org.telegram.telegrambots.TelegramBotsApi;
 import org.telegram.telegrambots.exceptions.TelegramApiException;
@@ -10,7 +10,7 @@ import org.telegram.telegrambots.exceptions.TelegramApiException;
 public class Main {
     public static void main(String[] args) {
         Logger.log("Starting GruBot...", Logger.INFO);
-        XMLreader.readBotConfig();
+        XMLReader.readBotConfig();
         Logger.log("Initializing GruBot...", Logger.INFO);
         ApiContextInitializer.init();
         TelegramBotsApi telegramBotsApi = new TelegramBotsApi();
