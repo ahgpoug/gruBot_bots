@@ -139,6 +139,7 @@ public class Firestore {
         HashMap<String, Object> announcement = new HashMap<>();
         announcement.put("group", message.getChatId());
         announcement.put("groupName", message.getChat().getTitle());
+        announcement.put("messageId", -1);
         announcement.put("author", message.getFrom().getId());
         announcement.put("authorName", message.getFrom().getFirstName() + " " + message.getFrom().getLastName());
         announcement.put("desc", announcementTitle);
@@ -149,9 +150,74 @@ public class Firestore {
             users.put(user.getKey(), "new");
         announcement.put("users", users);
 
-        db.collection("announcements").add(announcement);
+        ApiFuture<DocumentReference> reference = db.collection("announcements").add(announcement);
+        announcement.put("reference", reference);
         Logger.log("Announcement created", Logger.INFO);
         return announcement;
+    }
+
+    @SuppressWarnings("unchecked")
+    public HashMap<String, Object> createNewArticle(Update update) {
+        Logger.log("Creating new article...", Logger.INFO);
+        Message message = update.getMessage();
+        long chatId = message.getChatId();
+
+        Logger.log("Matching title to regexp...", Logger.INFO);
+        Matcher m = Pattern.compile(GruBotPatterns.articleTitle, Pattern.MULTILINE).matcher(message.getText());
+        String announcementTitle = "";
+        if (m.find()) {
+            announcementTitle = m.group(0).replace("*", "");
+            Logger.log("Title match is found", Logger.INFO);
+        } else {
+            Logger.log("Title match is not found", Logger.WARNING);
+        }
+
+        Logger.log("Matching text to regexp...", Logger.INFO);
+        m = Pattern.compile(GruBotPatterns.articleText, Pattern.MULTILINE).matcher(message.getText());
+        String announcementText = "";
+        if (m.find()) {
+            announcementText = m.group(0);
+            Logger.log("Text match is found", Logger.INFO);
+        } else {
+            Logger.log("Text match is not found", Logger.WARNING);
+        }
+
+        Logger.log("Matching finished", Logger.INFO);
+        Logger.log("Getting group users...", Logger.INFO);
+
+        Map<String, Boolean> groupUsers = new HashMap<>();
+        try {
+            Query groupsQuery = db.collection("articles").whereEqualTo("chatId", chatId);
+            ApiFuture<QuerySnapshot> snapshotApiFuture = groupsQuery.get();
+
+            List<QueryDocumentSnapshot> documents = snapshotApiFuture.get().getDocuments();
+            for (DocumentSnapshot document : documents) {
+                groupUsers = (Map<String, Boolean>) document.get("users");
+            }
+
+        } catch (Exception e) {
+            Logger.log(e.getMessage(), Logger.ERROR);
+        }
+
+        Logger.log("Creating article...", Logger.INFO);
+        HashMap<String, Object> article = new HashMap<>();
+        article.put("group", message.getChatId());
+        article.put("groupName", message.getChat().getTitle());
+        article.put("messageId", -1);
+        article.put("author", message.getFrom().getId());
+        article.put("authorName", message.getFrom().getFirstName() + " " + message.getFrom().getLastName());
+        article.put("desc", announcementTitle);
+        article.put("date", new Date());
+        article.put("text", announcementText);
+        HashMap<String, String> users = new HashMap<>();
+        for (Map.Entry<String, Boolean> user : groupUsers.entrySet())
+            users.put(user.getKey(), "new");
+        article.put("users", users);
+
+        ApiFuture<DocumentReference> reference = db.collection("articles").add(article);
+        article.put("reference", reference);
+        Logger.log("Article created", Logger.INFO);
+        return article;
     }
 
     @SuppressWarnings("unchecked")
@@ -203,7 +269,7 @@ public class Firestore {
         Logger.log("Creating poll...", Logger.INFO);
         HashMap<String, Object> vote = new HashMap<>();
         vote.put("group", message.getChatId());
-        vote.put("pollMessageId", -1);
+        vote.put("messageId", -1);
         vote.put("groupName", message.getChat().getTitle());
         vote.put("author", message.getFrom().getId());
         vote.put("authorName", message.getFrom().getFirstName() + " " + message.getFrom().getLastName());
@@ -221,10 +287,10 @@ public class Firestore {
         return vote;
     }
 
-    public void setMessageIdToPoll(int messageId, ApiFuture<DocumentReference> referenceApiFuture) throws ExecutionException, InterruptedException, NullPointerException {
+    public void setMessageIdToAction(int messageId, ApiFuture<DocumentReference> referenceApiFuture) throws ExecutionException, InterruptedException, NullPointerException {
         DocumentReference document = referenceApiFuture.get();
         Map<String, Object> updates = new HashMap<>();
-        updates.put("pollMessageId", messageId);
+        updates.put("messageId", messageId);
 
         document.update(updates);
     }
@@ -233,7 +299,7 @@ public class Firestore {
     public EditMessageText updatePollAnswer(GruBot bot, int userId, int pollOptionNumber, int pollMessageId) throws ExecutionException, InterruptedException, NullPointerException {
         EditMessageText editMessageText = null;
 
-        Query pollQuery = db.collection("votes").whereEqualTo("pollMessageId", pollMessageId);
+        Query pollQuery = db.collection("votes").whereEqualTo("messageId", pollMessageId);
         ApiFuture<QuerySnapshot> snapshotApiFuture = pollQuery.get();
         List<QueryDocumentSnapshot> documents = snapshotApiFuture.get().getDocuments();
         for (DocumentSnapshot document : documents) {
@@ -265,7 +331,7 @@ public class Firestore {
                 Integer currentValue = voteCounts.get(String.valueOf(entry.getValue()));
                 if (currentValue == null)
                     currentValue = 0;
-                
+
                 voteCounts.put(String.valueOf(entry.getValue()), currentValue + 1);
             }
 

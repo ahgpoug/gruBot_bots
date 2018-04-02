@@ -57,20 +57,26 @@ public class GruBot extends TelegramLongPollingBot {
                 if (message.hasText()) {
                     Matcher m = Pattern.compile(GruBotPatterns.announcement, Pattern.DOTALL).matcher(message.getText());
                     if (m.matches()) {
-                        if (canUserPinMessages(message))
+                        if (canUserCreateActions(message))
                             processAnnouncement(update);
                         else
                             sendTextMessage(update, "У пользователя недостаточно прав для создания объявлений");
                     }
 
-                    canUserPinMessages(message);
-
                     m = Pattern.compile(GruBotPatterns.vote, Pattern.DOTALL).matcher(message.getText());
                     if (m.matches()) {
-                        if (canUserPinMessages(message))
+                        if (canUserCreateActions(message))
                             processVote(update);
                         else
                             sendTextMessage(update, "У пользователя недостаточно прав для создания голосований");
+                    }
+
+                    m = Pattern.compile(GruBotPatterns.article, Pattern.DOTALL).matcher(message.getText());
+                    if (m.matches()) {
+                        if (canUserCreateActions(message))
+                            processArticle(update);
+                        else
+                            sendTextMessage(update, "У пользователя недостаточно прав для создания статей");
                     }
                 }
             } catch (Exception e) {
@@ -107,6 +113,32 @@ public class GruBot extends TelegramLongPollingBot {
         Logger.log(result, Logger.INFO);
     }
 
+    @SuppressWarnings("unchecked")
+    private void processArticle(Update update) throws TelegramApiException {
+        Message message = update.getMessage();
+        Logger.log("Article is detected", Logger.INFO);
+        HashMap<String, Object> article = firestore.createNewArticle(update);
+        String announcementText = String.format("Статья:\r\n%s\r%s", article.get("desc").toString(), article.get("text").toString());
+
+        Message articleMessage = sendTextMessage(update, announcementText);
+
+        if (message.getChat().isGroupChat())
+            sendTextMessage(update, "Закреплять сообщения можно только в супер-чатах.\nИзмените группу для активации данного функционала");
+        else {
+            PinChatMessage pinChatMessage = new PinChatMessage()
+                    .setChatId(message.getChatId())
+                    .setMessageId(articleMessage.getMessageId());
+            execute(pinChatMessage);
+        }
+
+        try {
+            firestore.setMessageIdToAction(articleMessage.getMessageId(), (ApiFuture<DocumentReference>) article.get("reference"));
+        } catch (Exception e) {
+            Logger.log(e.getMessage(), Logger.ERROR);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
     private void processAnnouncement(Update update) throws TelegramApiException {
         Message message = update.getMessage();
         Logger.log("Announcement is detected", Logger.INFO);
@@ -122,6 +154,12 @@ public class GruBot extends TelegramLongPollingBot {
                     .setChatId(message.getChatId())
                     .setMessageId(announcementMessage.getMessageId());
             execute(pinChatMessage);
+        }
+
+        try {
+            firestore.setMessageIdToAction(announcementMessage.getMessageId(), (ApiFuture<DocumentReference>) announcement.get("reference"));
+        } catch (Exception e) {
+            Logger.log(e.getMessage(), Logger.ERROR);
         }
     }
 
@@ -155,7 +193,7 @@ public class GruBot extends TelegramLongPollingBot {
         }
 
         try {
-            firestore.setMessageIdToPoll(voteMessage.getMessageId(), (ApiFuture<DocumentReference>) vote.get("reference"));
+            firestore.setMessageIdToAction(voteMessage.getMessageId(), (ApiFuture<DocumentReference>) vote.get("reference"));
         } catch (Exception e) {
             Logger.log(e.getMessage(), Logger.ERROR);
         }
@@ -184,7 +222,7 @@ public class GruBot extends TelegramLongPollingBot {
         return markupInline;
     }
 
-    private boolean canUserPinMessages(Message message) {
+    private boolean canUserCreateActions(Message message) {
         try {
             GetChatMember getChatMember = new GetChatMember()
                     .setUserId(message.getFrom().getId())
