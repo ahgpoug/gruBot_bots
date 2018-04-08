@@ -95,10 +95,11 @@ public class GruBot extends TelegramLongPollingBot {
                     editMessageText.setChatId(message.getChatId())
                             .setMessageId(message.getMessageId());
 
-                    if (!editMessageText.getText().equals(message.getText()))
-                        execute(editMessageText);
+                    execute(editMessageText);
                 } catch (Exception e) {
                     Logger.log(e.getMessage(), Logger.ERROR);
+                    Logger.log(e.getCause().getMessage(), Logger.ERROR);
+                    e.printStackTrace();
                 }
             }
         }

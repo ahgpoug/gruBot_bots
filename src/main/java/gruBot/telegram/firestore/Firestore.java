@@ -187,7 +187,7 @@ public class Firestore {
 
         Map<String, Boolean> groupUsers = new HashMap<>();
         try {
-            Query groupsQuery = db.collection("articles").whereEqualTo("chatId", chatId);
+            Query groupsQuery = db.collection("groups").whereEqualTo("chatId", chatId);
             ApiFuture<QuerySnapshot> snapshotApiFuture = groupsQuery.get();
 
             List<QueryDocumentSnapshot> documents = snapshotApiFuture.get().getDocuments();
@@ -309,7 +309,7 @@ public class Firestore {
             document.getReference().update(updates);
         }
 
-        pollQuery = db.collection("votes").whereEqualTo("pollMessageId", pollMessageId);
+        pollQuery = db.collection("votes").whereEqualTo("messageId", pollMessageId);
         snapshotApiFuture = pollQuery.get();
         documents = snapshotApiFuture.get().getDocuments();
         for (DocumentSnapshot document : documents) {
