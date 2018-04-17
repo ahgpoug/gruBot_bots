@@ -1,21 +1,28 @@
 package gruBot.telegram.logger;
 
+import org.apache.commons.lang3.StringUtils;
+
 import java.io.PrintStream;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Date;
 
 public class Logger {
-    public static final String INFO = "INFO";
-    public static final String WARNING = "WARNING";
-    public static final String ERROR = "ERROR";
-
     private static final String ANSI_CYAN = "\u001B[36m";
     private static final String ANSI_RED = "\u001B[31m";
     private static final String ANSI_GREEN = "\u001B[32m";
     private static final String ANSI_WHITE = "\u001B[37m";
 
+    public enum Type {
+        INFO, WARNING, ERROR
+    }
 
-    public static void log(String message, String type) {
+    public enum Source {
+        VK, TELEGRAM, FIRESTORE, ALL
+    }
+
+    public static void log(String message, Type type, Source source) {
         try {
             PrintStream consoleOut = new PrintStream(System.out, true, "UTF-8");
 
@@ -38,10 +45,32 @@ public class Logger {
                     break;
             }
 
-            String line = String.format("%s[%s] [%s] %s%s", color, type, date, message, ANSI_WHITE);
+            String line = String.format("%s%s [%s] %s %s%s", color, fls(type), date, fls(source), message, ANSI_WHITE);
             consoleOut.println(line);
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    private static String fls(Enum enumerator) {
+        return StringUtils.rightPad("[" + enumerator.toString() + "]", longestStringOfEnum(enumerator) + 2);
+    }
+
+    private static int longestStringOfEnum(Enum enumerator) {
+        int maxSize = 0;
+
+        if (enumerator instanceof Type) {
+            for (Type value : Type.values()) {
+                if (value.toString().length() > maxSize)
+                    maxSize = value.toString().length();
+            }
+        } else if (enumerator instanceof Source) {
+            for (Source value : Source.values()) {
+                if (value.toString().length() > maxSize)
+                    maxSize = value.toString().length();
+            }
+        }
+
+        return maxSize;
     }
 }

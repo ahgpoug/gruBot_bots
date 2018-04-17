@@ -6,8 +6,17 @@ compileJava.options.encoding = 'UTF-8'
 
 sourceCompatibility = 1.8
 
-repositories {
-    mavenCentral()
+buildscript {
+    repositories {
+        jcenter()
+    }
+}
+
+allprojects {
+    repositories {
+        mavenCentral()
+        maven { url "https://jitpack.io" }
+    }
 }
 
 jar {
@@ -31,7 +40,14 @@ task fatJar(type: Jar) {
 }
 
 dependencies {
+    compile fileTree(dir: 'libs', include: ['*.jar'])
     compile "org.telegram:telegrambots:3.6"
     compile 'com.google.cloud:google-cloud-firestore:0.38.0-beta'
+    compile 'org.apache.commons:commons-lang3:3.7'
+    compile 'org.slf4j:slf4j-log4j12:1.7.25'
+    compile 'org.json:json:20170516'
+    compile 'com.sparkjava:spark-core:2.6.0'
+
     compile "io.reactivex.rxjava2:rxjava:2.1.10"
 }
+

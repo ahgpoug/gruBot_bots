@@ -10,7 +10,7 @@ import java.util.Properties;
 public class XMLReader {
     public static void readBotConfig() {
         try {
-            Logger.log("Reading config...", Logger.INFO);
+            Logger.log("Reading config...", Logger.Type.INFO, Logger.Source.ALL);
             File file = new File("./config/gruBot-telegram.xml");
             FileInputStream fileInput = new FileInputStream(file);
             Properties properties = new Properties();
@@ -20,8 +20,9 @@ public class XMLReader {
             GruBotConfig.BOT_TOKEN = properties.getProperty("BOT_TOKEN");
             GruBotConfig.BOT_USERNAME = properties.getProperty("BOT_USERNAME");
             GruBotConfig.PROJECT_ID = properties.getProperty("PROJECT_ID");
+            GruBotConfig.VK_ACCESS_TOKEN = properties.getProperty("VK_ACCESS_TOKEN");
         } catch (Exception e) {
-            Logger.log(e.getMessage(), Logger.ERROR);
+            Logger.log(e.getMessage(), Logger.Type.ERROR, Logger.Source.ALL);
         }
     }
 }

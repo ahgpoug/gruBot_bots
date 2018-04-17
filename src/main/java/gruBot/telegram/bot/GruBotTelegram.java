@@ -4,6 +4,7 @@ import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.DocumentReference;
 import gruBot.telegram.firestore.Firestore;
 import gruBot.telegram.logger.Logger;
+import gruBot.telegram.utils.CustomExceptionHandler;
 import org.telegram.telegrambots.api.methods.groupadministration.GetChatMember;
 import org.telegram.telegrambots.api.methods.pinnedmessages.PinChatMessage;
 import org.telegram.telegrambots.api.methods.send.SendMessage;
@@ -24,7 +25,7 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class GruBot extends TelegramLongPollingBot {
+public class GruBotTelegram extends TelegramLongPollingBot {
     private Firestore firestore;
 
     @Override
@@ -37,22 +38,25 @@ public class GruBot extends TelegramLongPollingBot {
         return GruBotConfig.BOT_TOKEN;
     }
 
-    public GruBot() {
+    public GruBotTelegram(Firestore firestore) {
         super();
-        Logger.log("Initializing Firestore...", Logger.INFO);
-        this.firestore = new Firestore(this);
-        Logger.log("Started", Logger.INFO);
+        Thread.setDefaultUncaughtExceptionHandler(new CustomExceptionHandler());
+        this.firestore = firestore;
+        this.firestore.setTelegramBot(this);
+        Logger.log("Telegram Bot Started", Logger.Type.INFO, Logger.Source.TELEGRAM);
     }
 
-    public GruBot(DefaultBotOptions options) {
+    public GruBotTelegram(DefaultBotOptions options, Firestore firestore) {
         super(options);
-        Logger.log("Initializing Firestore...", Logger.INFO);
-        this.firestore = new Firestore(this);
-        Logger.log("Started", Logger.INFO);
+        Thread.setDefaultUncaughtExceptionHandler(new CustomExceptionHandler());
+        this.firestore = firestore;
+        this.firestore.setTelegramBot(this);
+        Logger.log("Telegram Bot Started", Logger.Type.INFO, Logger.Source.TELEGRAM);
     }
 
     @Override
     public void onUpdateReceived(Update update) {
+        Thread.setDefaultUncaughtExceptionHandler(new CustomExceptionHandler());
         if (update.hasMessage() && (update.getMessage().getChat().isGroupChat() || update.getMessage().getChat().isSuperGroupChat())) {
             Message message = update.getMessage();
             try {
@@ -89,7 +93,7 @@ public class GruBot extends TelegramLongPollingBot {
                     }
                 }
             } catch (Exception e) {
-                Logger.log(e.getMessage(), Logger.ERROR);
+                Logger.log(e.getMessage(), Logger.Type.ERROR, Logger.Source.VK);
             }
         } else if (update.hasCallbackQuery()) {
             String callbackData = update.getCallbackQuery().getData();
@@ -105,7 +109,7 @@ public class GruBot extends TelegramLongPollingBot {
 
                     execute(editMessageText);
                 } catch (Exception e) {
-                    Logger.log(e.getMessage(), Logger.ERROR);
+                    Logger.log(e.getMessage(), Logger.Type.ERROR, Logger.Source.FIRESTORE);
                 }
             }
         }
@@ -115,7 +119,7 @@ public class GruBot extends TelegramLongPollingBot {
         try {
             execute(editMessageText);
         } catch (Exception e) {
-            Logger.log(e.getMessage(), Logger.ERROR);
+            Logger.log(e.getMessage(), Logger.Type.ERROR, Logger.Source.TELEGRAM);
         }
     }
 
@@ -125,13 +129,13 @@ public class GruBot extends TelegramLongPollingBot {
         String messageAuthor = message.getFrom().getUserName();
 
         String result = String.format("'%s' wrote to '%s': '%s'", messageAuthor, chatName, messageText);
-        Logger.log(result, Logger.INFO);
+        Logger.log(result, Logger.Type.INFO, Logger.Source.TELEGRAM);
     }
 
     @SuppressWarnings("unchecked")
     private void processArticle(Update update) throws TelegramApiException {
         Message message = update.getMessage();
-        Logger.log("Article is detected", Logger.INFO);
+        Logger.log("Article is detected", Logger.Type.INFO, Logger.Source.TELEGRAM);
         HashMap<String, Object> article = firestore.createNewArticle(update);
         String announcementText = String.format("Статья:\r\n%s\r%s", article.get("desc").toString(), article.get("text").toString());
 
@@ -149,14 +153,14 @@ public class GruBot extends TelegramLongPollingBot {
         try {
             firestore.setMessageIdToAction(articleMessage.getMessageId(), (ApiFuture<DocumentReference>) article.get("reference"));
         } catch (Exception e) {
-            Logger.log(e.getMessage(), Logger.ERROR);
+            Logger.log(e.getMessage(), Logger.Type.ERROR, Logger.Source.TELEGRAM);
         }
     }
 
     @SuppressWarnings("unchecked")
     private void processAnnouncement(Update update) throws TelegramApiException {
         Message message = update.getMessage();
-        Logger.log("Announcement is detected", Logger.INFO);
+        Logger.log("Announcement is detected", Logger.Type.INFO, Logger.Source.TELEGRAM);
         HashMap<String, Object> announcement = firestore.createNewAnnouncement(update);
         String announcementText = String.format("Объявление:\r\n%s\r%s", announcement.get("desc").toString(), announcement.get("text").toString());
 
@@ -174,14 +178,14 @@ public class GruBot extends TelegramLongPollingBot {
         try {
             firestore.setMessageIdToAction(announcementMessage.getMessageId(), (ApiFuture<DocumentReference>) announcement.get("reference"));
         } catch (Exception e) {
-            Logger.log(e.getMessage(), Logger.ERROR);
+            Logger.log(e.getMessage(), Logger.Type.ERROR, Logger.Source.TELEGRAM);
         }
     }
 
     @SuppressWarnings("unchecked")
     private void processVote(Update update) throws TelegramApiException {
         Message message = update.getMessage();
-        Logger.log("Vote is detected", Logger.INFO);
+        Logger.log("Vote is detected", Logger.Type.INFO, Logger.Source.TELEGRAM);
 
         HashMap<String, Object> vote = firestore.createNewPoll(update);
 
@@ -210,7 +214,7 @@ public class GruBot extends TelegramLongPollingBot {
         try {
             firestore.setMessageIdToAction(voteMessage.getMessageId(), (ApiFuture<DocumentReference>) vote.get("reference"));
         } catch (Exception e) {
-            Logger.log(e.getMessage(), Logger.ERROR);
+            Logger.log(e.getMessage(), Logger.Type.ERROR, Logger.Source.TELEGRAM);
         }
     }
 
@@ -251,7 +255,7 @@ public class GruBot extends TelegramLongPollingBot {
 
             return false;
         } catch (Exception e) {
-            Logger.log(e.getMessage(), Logger.ERROR);
+            Logger.log(e.getMessage(), Logger.Type.ERROR, Logger.Source.TELEGRAM);
             e.printStackTrace();
             return false;
         }
