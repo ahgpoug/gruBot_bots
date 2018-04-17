@@ -13,6 +13,7 @@ import org.telegram.telegrambots.api.objects.Message;
 import org.telegram.telegrambots.api.objects.Update;
 import org.telegram.telegrambots.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.api.objects.replykeyboard.buttons.InlineKeyboardButton;
+import org.telegram.telegrambots.bots.DefaultBotOptions;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.exceptions.TelegramApiException;
 
@@ -37,8 +38,16 @@ public class GruBot extends TelegramLongPollingBot {
     }
 
     public GruBot() {
+        super();
         Logger.log("Initializing Firestore...", Logger.INFO);
-        this.firestore = new Firestore();
+        this.firestore = new Firestore(this);
+        Logger.log("Started", Logger.INFO);
+    }
+
+    public GruBot(DefaultBotOptions options) {
+        super(options);
+        Logger.log("Initializing Firestore...", Logger.INFO);
+        this.firestore = new Firestore(this);
         Logger.log("Started", Logger.INFO);
     }
 
@@ -81,7 +90,6 @@ public class GruBot extends TelegramLongPollingBot {
                 }
             } catch (Exception e) {
                 Logger.log(e.getMessage(), Logger.ERROR);
-                e.printStackTrace();
             }
         } else if (update.hasCallbackQuery()) {
             String callbackData = update.getCallbackQuery().getData();
@@ -91,17 +99,23 @@ public class GruBot extends TelegramLongPollingBot {
                 int checkedIndex = Integer.valueOf(callbackData.substring(callbackData.lastIndexOf("_") + 1));
 
                 try {
-                    EditMessageText editMessageText = firestore.updatePollAnswer(this, update.getCallbackQuery().getFrom().getId(), checkedIndex, message.getMessageId());
+                    EditMessageText editMessageText = firestore.updatePollAnswer(update.getCallbackQuery().getFrom().getId(), checkedIndex, message.getMessageId());
                     editMessageText.setChatId(message.getChatId())
                             .setMessageId(message.getMessageId());
 
                     execute(editMessageText);
                 } catch (Exception e) {
                     Logger.log(e.getMessage(), Logger.ERROR);
-                    Logger.log(e.getCause().getMessage(), Logger.ERROR);
-                    e.printStackTrace();
                 }
             }
+        }
+    }
+
+    public void updatePoll(EditMessageText editMessageText) {
+        try {
+            execute(editMessageText);
+        } catch (Exception e) {
+            Logger.log(e.getMessage(), Logger.ERROR);
         }
     }
 

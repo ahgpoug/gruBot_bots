@@ -21,13 +21,42 @@ import java.util.regex.Pattern;
 
 public class Firestore {
     private com.google.cloud.firestore.Firestore db;
+    private GruBot bot;
 
-    public Firestore() {
+    public Firestore(GruBot bot) {
         FirestoreOptions firestoreOptions =
                 FirestoreOptions.getDefaultInstance().toBuilder()
                         .setProjectId(GruBotConfig.PROJECT_ID)
                         .build();
         this.db = firestoreOptions.getService();
+        this.bot = bot;
+        setPollUpdatesListener();
+    }
+
+    private void setPollUpdatesListener() {
+        Logger.log("Setting polls update listener...", Logger.INFO);
+        Query pollsQuery = db.collection("votes");
+        pollsQuery.addSnapshotListener((snapshots, error) -> {
+            if (error == null) {
+                for (DocumentChange dc : snapshots.getDocumentChanges()) {
+                    switch (dc.getType()) {
+                        case ADDED:
+                            break;
+                        case MODIFIED:
+                            DocumentSnapshot document = dc.getDocument();
+                            EditMessageText editMessageText = getMessageText(document)
+                                    .setChatId(Long.valueOf(document.get("group").toString()))
+                                    .setMessageId(Integer.valueOf(document.get("messageId").toString()));
+                            bot.updatePoll(editMessageText);
+                            break;
+                        case REMOVED:
+                            break;
+                        default:
+                            break;
+                    }
+                }
+            }
+        });
     }
 
     public boolean checkGroupExists(long chatId) throws ExecutionException, InterruptedException {
@@ -144,6 +173,7 @@ public class Firestore {
         announcement.put("authorName", message.getFrom().getFirstName() + " " + message.getFrom().getLastName());
         announcement.put("desc", announcementTitle);
         announcement.put("date", new Date());
+        announcement.put("type", "TELEGRAM");
         announcement.put("text", announcementText);
         HashMap<String, String> users = new HashMap<>();
         for (Map.Entry<String, Boolean> user : groupUsers.entrySet())
@@ -208,6 +238,7 @@ public class Firestore {
         article.put("authorName", message.getFrom().getFirstName() + " " + message.getFrom().getLastName());
         article.put("desc", announcementTitle);
         article.put("date", new Date());
+        article.put("type", "TELEGRAM");
         article.put("text", announcementText);
         HashMap<String, String> users = new HashMap<>();
         for (Map.Entry<String, Boolean> user : groupUsers.entrySet())
@@ -275,6 +306,7 @@ public class Firestore {
         vote.put("authorName", message.getFrom().getFirstName() + " " + message.getFrom().getLastName());
         vote.put("desc", voteTitle);
         vote.put("date", new Date());
+        vote.put("type", "TELEGRAM");
         vote.put("voteOptions", voteOptions);
         HashMap<String, String> users = new HashMap<>();
         for (Map.Entry<String, Boolean> user : groupUsers.entrySet())
@@ -296,7 +328,7 @@ public class Firestore {
     }
 
     @SuppressWarnings("unchecked")
-    public EditMessageText updatePollAnswer(GruBot bot, int userId, int pollOptionNumber, int pollMessageId) throws ExecutionException, InterruptedException, NullPointerException {
+    public EditMessageText updatePollAnswer(int userId, int pollOptionNumber, int pollMessageId) throws ExecutionException, InterruptedException, NullPointerException {
         EditMessageText editMessageText = null;
 
         Query pollQuery = db.collection("votes").whereEqualTo("messageId", pollMessageId);
@@ -319,52 +351,57 @@ public class Firestore {
 
             document.getReference().update(updates);
 
-            String title = (String) document.get("desc");
-            HashMap<String, String> voteOptions = (HashMap<String, String>) document.get("voteOptions");
-            HashMap<String, String> users = (HashMap<String, String>) document.get("users");
-
-            newMessageText = title;
-
-            HashMap<String, Integer> voteCounts = new HashMap<>();
-
-            for (Map.Entry<String, String> entry : users.entrySet()) {
-                Integer currentValue = voteCounts.get(String.valueOf(entry.getValue()));
-                if (currentValue == null)
-                    currentValue = 0;
-
-                voteCounts.put(String.valueOf(entry.getValue()), currentValue + 1);
-            }
-
-            StringBuilder builder = new StringBuilder(newMessageText);
-            for (Map.Entry<String, String> entry : voteOptions.entrySet()) {
-                Integer value = voteCounts.get(entry.getKey().trim());
-                if (value == null)
-                    value = 0;
-
-                builder.append("\r\n")
-                        .append(entry.getKey())
-                        .append(". ")
-                        .append(entry.getValue())
-                        .append(" [")
-                        .append(value)
-                        .append("]");
-            }
-            Integer value = voteCounts.get("new");
-            if (value == null)
-                value = 0;
-            builder.append("\r\n\r\n")
-                    .append("Не проголосовало [")
-                    .append(value)
-                    .append("]");
-
-            newMessageText = builder.toString();
-
-            editMessageText = new EditMessageText()
-                    .setText(newMessageText)
-                    .setReplyMarkup(bot.getVoteKeyboard(voteOptions));
+            editMessageText = getMessageText(document);
         }
 
 
         return editMessageText;
+    }
+
+    @SuppressWarnings("unchecked")
+    private EditMessageText getMessageText(DocumentSnapshot document) {
+        String title = (String) document.get("desc");
+        HashMap<String, String> voteOptions = (HashMap<String, String>) document.get("voteOptions");
+        HashMap<String, String> users = (HashMap<String, String>) document.get("users");
+
+        String newMessageText = title;
+
+        HashMap<String, Integer> voteCounts = new HashMap<>();
+
+        for (Map.Entry<String, String> entry : users.entrySet()) {
+            Integer currentValue = voteCounts.get(String.valueOf(entry.getValue()));
+            if (currentValue == null)
+                currentValue = 0;
+
+            voteCounts.put(String.valueOf(entry.getValue()), currentValue + 1);
+        }
+
+        StringBuilder builder = new StringBuilder(newMessageText);
+        for (Map.Entry<String, String> entry : voteOptions.entrySet()) {
+            Integer value = voteCounts.get(entry.getKey().trim());
+            if (value == null)
+                value = 0;
+
+            builder.append("\r\n")
+                    .append(entry.getKey())
+                    .append(". ")
+                    .append(entry.getValue())
+                    .append(" [")
+                    .append(value)
+                    .append("]");
+        }
+        Integer value = voteCounts.get("new");
+        if (value == null)
+            value = 0;
+        builder.append("\r\n\r\n")
+                .append("Не проголосовало [")
+                .append(value)
+                .append("]");
+
+        newMessageText = builder.toString();
+
+        return new EditMessageText()
+                .setText(newMessageText)
+                .setReplyMarkup(bot.getVoteKeyboard(voteOptions));
     }
 }
