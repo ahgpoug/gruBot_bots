@@ -2,14 +2,12 @@ package gruBot.telegram.firestore;
 
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.*;
-import gruBot.telegram.bot.GruBotTelegram;
 import gruBot.telegram.bot.GruBotConfig;
 import gruBot.telegram.bot.GruBotPatterns;
+import gruBot.telegram.bot.GruBotTelegram;
 import gruBot.telegram.bot.GruBotVK;
 import gruBot.telegram.logger.Logger;
 import org.telegram.telegrambots.api.methods.updatingmessages.EditMessageText;
-import org.telegram.telegrambots.api.objects.Message;
-import org.telegram.telegrambots.api.objects.Update;
 
 import java.util.Date;
 import java.util.HashMap;
@@ -53,7 +51,7 @@ public class Firestore {
                             break;
                         case MODIFIED:
                             DocumentSnapshot document = dc.getDocument();
-                            EditMessageText editMessageText = getMessageText(document)
+                            EditMessageText editMessageText = getEditMessageText(document)
                                     .setChatId(Long.valueOf(document.get("group").toString()))
                                     .setMessageId(Integer.valueOf(document.get("messageId").toString()));
                             telegramBot.updatePoll(editMessageText);
@@ -80,11 +78,9 @@ public class Firestore {
     }
 
     @SuppressWarnings("unchecked")
-    public void checkUserExistsInGroup(Update update) throws ExecutionException, InterruptedException, NullPointerException {
-        long chatId = update.getMessage().getChatId();
-        long userId = update.getMessage().getFrom().getId();
-
+    public void checkUserExistsInGroup(long chatId, long userId) throws ExecutionException, InterruptedException, NullPointerException {
         Logger.log("Checking user group relations...", Logger.Type.INFO, Logger.Source.FIRESTORE);
+
         Query groupsQuery = db.collection("groups").whereEqualTo("chatId", chatId);
         ApiFuture<QuerySnapshot> snapshotApiFuture = groupsQuery.get();
         List<QueryDocumentSnapshot> documents = snapshotApiFuture.get().getDocuments();
@@ -113,11 +109,8 @@ public class Firestore {
         }
     }
 
-    public void createNewGroup(Update update) {
+    public void createNewGroup(long chatId, String chatName) {
         Logger.log("Creating new group...", Logger.Type.INFO, Logger.Source.FIRESTORE);
-        Message message = update.getMessage();
-        long chatId = message.getChatId();
-        String chatName = message.getChat().getTitle();
 
         HashMap<String, Object> groupMap = new HashMap<>();
         groupMap.put("chatId", chatId);
@@ -129,13 +122,11 @@ public class Firestore {
     }
 
     @SuppressWarnings("unchecked")
-    public HashMap<String, Object> createNewAnnouncement(Update update) {
+    public HashMap<String, Object> createNewAnnouncement(long chatId, String chatName, long authorId, String authorName, String messageText) {
         Logger.log("Creating new announcement...", Logger.Type.INFO, Logger.Source.FIRESTORE);
-        Message message = update.getMessage();
-        long chatId = message.getChatId();
 
         Logger.log("Matching title to regexp...", Logger.Type.INFO, Logger.Source.FIRESTORE);
-        Matcher m = Pattern.compile(GruBotPatterns.announcementTitle, Pattern.MULTILINE).matcher(message.getText());
+        Matcher m = Pattern.compile(GruBotPatterns.announcementTitle, Pattern.MULTILINE).matcher(messageText);
         String announcementTitle = "";
         if (m.find()) {
             announcementTitle = m.group(0).replace("!", "");
@@ -145,7 +136,7 @@ public class Firestore {
         }
 
         Logger.log("Matching text to regexp...", Logger.Type.INFO, Logger.Source.FIRESTORE);
-        m = Pattern.compile(GruBotPatterns.announcementText, Pattern.MULTILINE).matcher(message.getText());
+        m = Pattern.compile(GruBotPatterns.announcementText, Pattern.MULTILINE).matcher(messageText);
         String announcementText = "";
         if (m.find()) {
             announcementText = m.group(0);
@@ -173,11 +164,11 @@ public class Firestore {
 
         Logger.log("Creating announcement...", Logger.Type.INFO, Logger.Source.FIRESTORE);
         HashMap<String, Object> announcement = new HashMap<>();
-        announcement.put("group", message.getChatId());
-        announcement.put("groupName", message.getChat().getTitle());
+        announcement.put("group", chatId);
+        announcement.put("groupName", chatName);
         announcement.put("messageId", -1);
-        announcement.put("author", message.getFrom().getId());
-        announcement.put("authorName", message.getFrom().getFirstName() + " " + message.getFrom().getLastName());
+        announcement.put("author", authorId);
+        announcement.put("authorName", authorName);
         announcement.put("desc", announcementTitle);
         announcement.put("date", new Date());
         announcement.put("type", "TELEGRAM");
@@ -194,13 +185,11 @@ public class Firestore {
     }
 
     @SuppressWarnings("unchecked")
-    public HashMap<String, Object> createNewArticle(Update update) {
+    public HashMap<String, Object> createNewArticle(long chatId, String chatName, long authorId, String authorName, String messageText) {
         Logger.log("Creating new article...", Logger.Type.INFO, Logger.Source.FIRESTORE);
-        Message message = update.getMessage();
-        long chatId = message.getChatId();
 
         Logger.log("Matching title to regexp...", Logger.Type.INFO, Logger.Source.FIRESTORE);
-        Matcher m = Pattern.compile(GruBotPatterns.articleTitle, Pattern.MULTILINE).matcher(message.getText());
+        Matcher m = Pattern.compile(GruBotPatterns.articleTitle, Pattern.MULTILINE).matcher(messageText);
         String announcementTitle = "";
         if (m.find()) {
             announcementTitle = m.group(0).replace("*", "");
@@ -210,7 +199,7 @@ public class Firestore {
         }
 
         Logger.log("Matching text to regexp...", Logger.Type.INFO, Logger.Source.FIRESTORE);
-        m = Pattern.compile(GruBotPatterns.articleText, Pattern.MULTILINE).matcher(message.getText());
+        m = Pattern.compile(GruBotPatterns.articleText, Pattern.MULTILINE).matcher(messageText);
         String announcementText = "";
         if (m.find()) {
             announcementText = m.group(0);
@@ -238,11 +227,11 @@ public class Firestore {
 
         Logger.log("Creating article...", Logger.Type.INFO, Logger.Source.FIRESTORE);
         HashMap<String, Object> article = new HashMap<>();
-        article.put("group", message.getChatId());
-        article.put("groupName", message.getChat().getTitle());
+        article.put("group", chatId);
+        article.put("groupName", chatName);
         article.put("messageId", -1);
-        article.put("author", message.getFrom().getId());
-        article.put("authorName", message.getFrom().getFirstName() + " " + message.getFrom().getLastName());
+        article.put("author", authorId);
+        article.put("authorName", authorName);
         article.put("desc", announcementTitle);
         article.put("date", new Date());
         article.put("type", "TELEGRAM");
@@ -259,13 +248,11 @@ public class Firestore {
     }
 
     @SuppressWarnings("unchecked")
-    public HashMap<String, Object> createNewPoll(Update update) {
+    public HashMap<String, Object> createNewPoll(long chatId, String chatName, long authorId, String authorName, String messageText) {
         Logger.log("Creating new poll...", Logger.Type.INFO, Logger.Source.FIRESTORE);
-        Message message = update.getMessage();
-        long chatId = message.getChatId();
 
         Logger.log("Matching title to regexp...", Logger.Type.INFO, Logger.Source.FIRESTORE);
-        Matcher m = Pattern.compile(GruBotPatterns.voteTitle, Pattern.MULTILINE).matcher(message.getText());
+        Matcher m = Pattern.compile(GruBotPatterns.voteTitle, Pattern.MULTILINE).matcher(messageText);
         String voteTitle = "";
         if(m.find()) {
             voteTitle = m.group(0).replace("?", "").replaceAll("\r", "");
@@ -275,7 +262,7 @@ public class Firestore {
         }
 
         Logger.log("Matching text to regexp...", Logger.Type.INFO, Logger.Source.FIRESTORE);
-        m = Pattern.compile(GruBotPatterns.voteText, Pattern.MULTILINE).matcher(message.getText());
+        m = Pattern.compile(GruBotPatterns.voteText, Pattern.MULTILINE).matcher(messageText);
 
         HashMap<String, String> voteOptions = new HashMap<>();
         int i = 0;
@@ -306,11 +293,11 @@ public class Firestore {
 
         Logger.log("Creating poll...", Logger.Type.INFO, Logger.Source.FIRESTORE);
         HashMap<String, Object> vote = new HashMap<>();
-        vote.put("group", message.getChatId());
+        vote.put("group", chatId);
         vote.put("messageId", -1);
-        vote.put("groupName", message.getChat().getTitle());
-        vote.put("author", message.getFrom().getId());
-        vote.put("authorName", message.getFrom().getFirstName() + " " + message.getFrom().getLastName());
+        vote.put("groupName", chatName);
+        vote.put("author", authorId);
+        vote.put("authorName", authorName);
         vote.put("desc", voteTitle);
         vote.put("date", new Date());
         vote.put("type", "TELEGRAM");
@@ -357,15 +344,14 @@ public class Firestore {
 
             document.getReference().update(updates);
 
-            editMessageText = getMessageText(document);
+            editMessageText = getEditMessageText(document);
         }
-
 
         return editMessageText;
     }
 
     @SuppressWarnings("unchecked")
-    private EditMessageText getMessageText(DocumentSnapshot document) {
+    private EditMessageText getEditMessageText(DocumentSnapshot document) {
         String title = (String) document.get("desc");
         HashMap<String, String> voteOptions = (HashMap<String, String>) document.get("voteOptions");
         HashMap<String, String> users = (HashMap<String, String>) document.get("users");

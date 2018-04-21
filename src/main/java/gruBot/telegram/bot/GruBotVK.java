@@ -1,15 +1,11 @@
 package gruBot.telegram.bot;
 
-import com.petersamokhin.bots.sdk.callbacks.CallbackTriple;
 import com.petersamokhin.bots.sdk.clients.User;
 import com.petersamokhin.bots.sdk.utils.vkapi.API;
 import gruBot.telegram.firestore.Firestore;
 import gruBot.telegram.logger.Logger;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import com.petersamokhin.bots.sdk.callbacks.Callback;
-
-import java.util.HashMap;
 
 public class GruBotVK {
     private Firestore firestore;

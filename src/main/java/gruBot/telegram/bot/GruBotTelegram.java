@@ -63,9 +63,9 @@ public class GruBotTelegram extends TelegramLongPollingBot {
                 processCommonMessage(message);
 
                 if (!firestore.checkGroupExists(message.getChatId()))
-                    firestore.createNewGroup(update);
+                    firestore.createNewGroup(message.getChatId(), message.getChat().getTitle());
 
-                firestore.checkUserExistsInGroup(update);
+                firestore.checkUserExistsInGroup(update.getMessage().getChatId(), update.getMessage().getFrom().getId());
 
                 if (message.hasText()) {
                     Matcher m = Pattern.compile(GruBotPatterns.announcement, Pattern.DOTALL).matcher(message.getText());
@@ -136,7 +136,7 @@ public class GruBotTelegram extends TelegramLongPollingBot {
     private void processArticle(Update update) throws TelegramApiException {
         Message message = update.getMessage();
         Logger.log("Article is detected", Logger.Type.INFO, Logger.Source.TELEGRAM);
-        HashMap<String, Object> article = firestore.createNewArticle(update);
+        HashMap<String, Object> article = firestore.createNewArticle(message.getChatId(), message.getChat().getTitle(), message.getFrom().getId(), message.getFrom().getFirstName() + " " + message.getFrom().getLastName(), message.getText());
         String announcementText = String.format("Статья:\r\n%s\r%s", article.get("desc").toString(), article.get("text").toString());
 
         Message articleMessage = sendTextMessage(update, announcementText);
@@ -161,7 +161,7 @@ public class GruBotTelegram extends TelegramLongPollingBot {
     private void processAnnouncement(Update update) throws TelegramApiException {
         Message message = update.getMessage();
         Logger.log("Announcement is detected", Logger.Type.INFO, Logger.Source.TELEGRAM);
-        HashMap<String, Object> announcement = firestore.createNewAnnouncement(update);
+        HashMap<String, Object> announcement = firestore.createNewAnnouncement(message.getChatId(), message.getChat().getTitle(), message.getFrom().getId(), message.getFrom().getFirstName() + " " + message.getFrom().getLastName(), message.getText());
         String announcementText = String.format("Объявление:\r\n%s\r%s", announcement.get("desc").toString(), announcement.get("text").toString());
 
         Message announcementMessage = sendTextMessage(update, announcementText);
@@ -187,7 +187,7 @@ public class GruBotTelegram extends TelegramLongPollingBot {
         Message message = update.getMessage();
         Logger.log("Vote is detected", Logger.Type.INFO, Logger.Source.TELEGRAM);
 
-        HashMap<String, Object> vote = firestore.createNewPoll(update);
+        HashMap<String, Object> vote = firestore.createNewPoll(message.getChatId(), message.getChat().getTitle(), message.getFrom().getId(), message.getFrom().getFirstName() + " " + message.getFrom().getLastName(), message.getText());
 
         StringBuilder options = new StringBuilder();
         for (Map.Entry<String, String> option : ((HashMap<String, String>) vote.get("voteOptions")).entrySet())

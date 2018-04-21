@@ -4,8 +4,6 @@ import org.apache.commons.lang3.StringUtils;
 
 import java.io.PrintStream;
 import java.text.SimpleDateFormat;
-import java.util.Arrays;
-import java.util.Comparator;
 import java.util.Date;
 
 public class Logger {

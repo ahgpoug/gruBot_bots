@@ -2,9 +2,6 @@ package gruBot.telegram.utils;
 
 
 import gruBot.telegram.logger.Logger;
-import org.apache.http.conn.HttpHostConnectException;
-
-import java.net.ConnectException;
 
 public class CustomExceptionHandler implements Thread.UncaughtExceptionHandler {
     private Thread.UncaughtExceptionHandler exceptionHandler;
